@@ -4,7 +4,6 @@ import 'dart:typed_data';
 import 'package:encrypt/encrypt.dart';
 import 'package:crypto/crypto.dart';
 
-// Copying necessary parts from EncryptionHelper since it might depend on Flutter
 class EncryptionTool {
   static const String _passphrase = 'secure_passphrase_123';
 
@@ -27,12 +26,14 @@ void main() {
   final config = {
     "codes": {
       "1234": "show_debug"
-    }
+    },
+    "voltage_multiplier": 2.0,
+    "current_multiplier": 1.0
   };
 
   final jsonStr = json.encode(config);
   final encryptedBytes = EncryptionTool.encrypt(jsonStr);
 
   File('assets/config.bin').writeAsBytesSync(encryptedBytes);
-  print('Generated assets/config.bin');
+  print('Generated assets/config.bin with default OnePlus multipliers (voltage_multiplier: 2.0)');
 }

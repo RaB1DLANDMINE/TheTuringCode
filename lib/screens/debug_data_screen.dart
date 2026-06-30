@@ -5,6 +5,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../services/platform_service.dart';
+import '../services/config_service.dart';
 
 class DebugDataScreen extends StatefulWidget {
   const DebugDataScreen({super.key});
@@ -42,27 +43,30 @@ class _DebugDataScreenState extends State<DebugDataScreen> {
     final wifiCountry = await PlatformService.getWifiCountry();
     final batteryData = await PlatformService.getBatteryData();
 
+    final config = ConfigService.getLoadedConfig() ?? {};
+    final double voltageMultiplier = config['voltage_multiplier']?.toDouble() ?? 1.0;
+    final double currentMultiplier = config['current_multiplier']?.toDouble() ?? 1.0;
+
     final voltageMv = (batteryData['voltage_mv'] ?? 0);
     final currentRaw = (batteryData['current_raw'] ?? 0).abs();
-    final manufacturer = (batteryData['manufacturer'] ?? "");
 
-    // Current unit heuristic
+    // Standard Android: current in uA
     double currentAmps = currentRaw / 1000000.0;
+    // Heuristic for mA
     if (currentAmps > 0 && currentAmps < 0.05) {
       currentAmps = currentRaw / 1000.0;
     }
 
-    final wattage = (voltageMv / 1000.0) * currentAmps;
-
-    // Dual-cell boost (OnePlus specific)
-    bool isOnePlus = manufacturer.contains("oneplus") || manufacturer.contains("oppo");
-    final boostedWattage = isOnePlus ? wattage * 2.0 : wattage;
+    // Apply custom multipliers from config
+    final double finalVoltage = (voltageMv / 1000.0) * voltageMultiplier;
+    final double finalCurrent = currentAmps * currentMultiplier;
+    final double finalWattage = finalVoltage * finalCurrent;
 
     final jumble = _generateJumble(
-      wattage.toStringAsFixed(2),
-      (voltageMv / 1000.0).toStringAsFixed(2),
-      currentAmps.toStringAsFixed(3),
-      boostedWattage.toStringAsFixed(2),
+      finalWattage.toStringAsFixed(2),
+      finalVoltage.toStringAsFixed(2),
+      finalCurrent.toStringAsFixed(3),
+      (finalWattage * 2.0).toStringAsFixed(2), // Just for legacy/comparison
     );
 
     setState(() {

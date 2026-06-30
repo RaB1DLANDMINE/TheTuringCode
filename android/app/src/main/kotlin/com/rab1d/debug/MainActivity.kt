@@ -11,6 +11,7 @@ import androidx.annotation.NonNull
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.io.File
 import java.util.Locale
 
 class MainActivity: FlutterActivity() {
@@ -59,13 +60,25 @@ class MainActivity: FlutterActivity() {
         val intent = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
 
         // Voltage in mV
-        val voltage = intent?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0) ?: 0
+        var voltage = intent?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0) ?: 0
 
-        // Current in uA (MicroAmps). Note: some devices report in mA (MilliAmps).
+        // Current in uA (MicroAmps)
         var currentRaw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             batteryManager.getLongProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
         } else {
             0L
+        }
+
+        // Try reading from sysfs for more accuracy on some devices (OPlus specific)
+        val sysVoltage = readSysFile("/sys/class/power_supply/battery/voltage_now")
+        if (sysVoltage != null) {
+            // voltage_now is usually in uV
+            voltage = (sysVoltage.toLong() / 1000).toInt()
+        }
+
+        val sysCurrent = readSysFile("/sys/class/power_supply/battery/current_now")
+        if (sysCurrent != null) {
+            currentRaw = sysCurrent.toLong()
         }
 
         return mapOf(
@@ -75,28 +88,32 @@ class MainActivity: FlutterActivity() {
         )
     }
 
+    private fun readSysFile(path: String): String? {
+        return try {
+            val file = File(path)
+            if (file.exists() && file.canRead()) {
+                file.readText().trim()
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     private fun getChargingWattage(): Double {
         val data = getBatteryData()
         val voltage = data["voltage_mv"] as Int
         val currentRaw = data["current_raw"] as Long
-        val manufacturer = data["manufacturer"] as String
 
-        // Standard Android: current in uA
+        // Default: assume current is in uA
         var currentAmps = Math.abs(currentRaw).toDouble() / 1000000.0
 
-        // OnePlus/Oppo/Realme often use dual-cell batteries where the reported current/voltage
-        // might only be for one cell, or current is reported in mA.
-        // Heuristic: if currentAmps is very low (< 0.05) and we are charging, assume mA.
+        // Heuristic: if current is suspiciously low for charging, maybe it's mA
         if (currentAmps > 0 && currentAmps < 0.05) {
             currentAmps = Math.abs(currentRaw).toDouble() / 1000.0
         }
 
-        var wattage = (voltage.toDouble() / 1000.0) * currentAmps
-
-        // OnePlus Specific: If manufacturer is OnePlus/Oppo and wattage is around half
-        // of expected, it might be dual-cell. We'll provide both raw and "boosted"
-        // in the jumble for verification.
-
-        return wattage
+        return (voltage.toDouble() / 1000.0) * currentAmps
     }
 }
