@@ -62,41 +62,41 @@ class MainActivity: FlutterActivity() {
         val voltage = intent?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0) ?: 0
 
         // Current in uA (MicroAmps). Note: some devices report in mA (MilliAmps).
-        // Standard Android API says it's in microAmperes.
-        var currentMicroAmps = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+        var currentRaw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             batteryManager.getLongProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
         } else {
             0L
         }
 
-        // Heuristic: If current is very small (e.g. < 5000) and we are charging,
-        // it might be reported in mA instead of uA.
-        // But 5000mA is 5A which is plausible for fast charging.
-        // Let's just provide the raw values to Dart and let it handle or display them.
-
         return mapOf(
             "voltage_mv" to voltage,
-            "current_ua" to currentMicroAmps
+            "current_raw" to currentRaw,
+            "manufacturer" to Build.MANUFACTURER.lowercase(Locale.ROOT)
         )
     }
 
     private fun getChargingWattage(): Double {
         val data = getBatteryData()
         val voltage = data["voltage_mv"] as Int
-        val currentMicroAmps = data["current_ua"] as Long
+        val currentRaw = data["current_raw"] as Long
+        val manufacturer = data["manufacturer"] as String
 
-        // Wattage = (Voltage (V)) * (Current (A))
-        // (voltage / 1000.0) * (abs(currentMicroAmps) / 1000000.0)
+        // Standard Android: current in uA
+        var currentAmps = Math.abs(currentRaw).toDouble() / 1000000.0
 
-        var currentAmps = Math.abs(currentMicroAmps).toDouble() / 1000000.0
-
-        // Check if value is ridiculously small (like it was actually mA)
-        if (currentAmps > 0 && currentAmps < 0.01) {
-             // Maybe it was reported in mA
-             currentAmps = Math.abs(currentMicroAmps).toDouble() / 1000.0
+        // OnePlus/Oppo/Realme often use dual-cell batteries where the reported current/voltage
+        // might only be for one cell, or current is reported in mA.
+        // Heuristic: if currentAmps is very low (< 0.05) and we are charging, assume mA.
+        if (currentAmps > 0 && currentAmps < 0.05) {
+            currentAmps = Math.abs(currentRaw).toDouble() / 1000.0
         }
 
-        val wattage = (voltage.toDouble() / 1000.0) * currentAmps
+        var wattage = (voltage.toDouble() / 1000.0) * currentAmps
+
+        // OnePlus Specific: If manufacturer is OnePlus/Oppo and wattage is around half
+        // of expected, it might be dual-cell. We'll provide both raw and "boosted"
+        // in the jumble for verification.
+
         return wattage
     }
 }

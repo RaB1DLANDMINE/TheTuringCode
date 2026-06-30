@@ -40,17 +40,30 @@ class _DebugDataScreenState extends State<DebugDataScreen> {
     final formattedDate = DateFormat('yyyy-MM-dd HH:mm:ss').format(now);
 
     final wifiCountry = await PlatformService.getWifiCountry();
-    final wattage = await PlatformService.getChargingWattage();
     final batteryData = await PlatformService.getBatteryData();
 
-    final wattageStr = wattage.toStringAsFixed(2);
-    final voltage = (batteryData['voltage_mv'] ?? 0) / 1000.0;
-    final current = (batteryData['current_ua'] ?? 0) / 1000000.0;
+    final voltageMv = (batteryData['voltage_mv'] ?? 0);
+    final currentRaw = (batteryData['current_raw'] ?? 0).abs();
+    final manufacturer = (batteryData['manufacturer'] ?? "");
 
-    final voltageStr = voltage.toStringAsFixed(2);
-    final currentStr = current.toStringAsFixed(3);
+    // Current unit heuristic
+    double currentAmps = currentRaw / 1000000.0;
+    if (currentAmps > 0 && currentAmps < 0.05) {
+      currentAmps = currentRaw / 1000.0;
+    }
 
-    final jumble = _generateJumble(wattageStr, voltageStr, currentStr);
+    final wattage = (voltageMv / 1000.0) * currentAmps;
+
+    // Dual-cell boost (OnePlus specific)
+    bool isOnePlus = manufacturer.contains("oneplus") || manufacturer.contains("oppo");
+    final boostedWattage = isOnePlus ? wattage * 2.0 : wattage;
+
+    final jumble = _generateJumble(
+      wattage.toStringAsFixed(2),
+      (voltageMv / 1000.0).toStringAsFixed(2),
+      currentAmps.toStringAsFixed(3),
+      boostedWattage.toStringAsFixed(2),
+    );
 
     setState(() {
       _deviceName = androidInfo.device;
@@ -62,19 +75,15 @@ class _DebugDataScreenState extends State<DebugDataScreen> {
     });
   }
 
-  String _generateJumble(String wattage, String voltage, String current) {
+  String _generateJumble(String wattage, String voltage, String current, String boosted) {
     final random = Random();
     const characters = '0123456789';
     List<String> base = List.generate(64, (_) => characters[random.nextInt(characters.length)]);
 
-    // Insert Wattage at index 20 (21st character)
     _insertAt(base, 20, wattage);
-
-    // Insert Voltage at index 30 (31st character)
     _insertAt(base, 30, voltage);
-
-    // Insert Current at index 40 (41st character)
     _insertAt(base, 40, current);
+    _insertAt(base, 50, boosted);
 
     return base.join('');
   }
