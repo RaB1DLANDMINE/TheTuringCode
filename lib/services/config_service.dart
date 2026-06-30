@@ -19,6 +19,7 @@ class ConfigService {
       // 1. Try to load from external storage (Downloads)
       final externalFile = await _getExternalFile();
       if (externalFile != null && await externalFile.exists()) {
+        print('Loading config from external: ${externalFile.path}');
         final bytes = await externalFile.readAsBytes();
         final decrypted = EncryptionHelper.decrypt(bytes);
         _cachedConfig = json.decode(decrypted);
@@ -26,6 +27,7 @@ class ConfigService {
       }
 
       // 2. Fallback to assets
+      print('Loading config from assets');
       final assetBytes = await rootBundle.load(_assetPath);
       final decrypted = EncryptionHelper.decrypt(assetBytes.buffer.asUint8List());
       _cachedConfig = json.decode(decrypted);
@@ -38,10 +40,29 @@ class ConfigService {
 
   static Future<bool> isAdminModeEnabled() async {
     try {
+      // Check in Downloads folder first for user accessibility
+      if (Platform.isAndroid) {
+        if (await Permission.manageExternalStorage.request().isGranted ||
+            await Permission.storage.request().isGranted) {
+          final downloadDir = Directory('/storage/emulated/0/Download');
+          final adminFile = File('${downloadDir.path}/$_adminFileName');
+          if (await adminFile.exists()) {
+            print('Admin mode enabled via Downloads file: ${adminFile.path}');
+            return true;
+          }
+        }
+      }
+
+      // Fallback to internal documents directory
       final directory = await getApplicationDocumentsDirectory();
-      final adminFile = File('${directory.path}/$_adminFileName');
-      return await adminFile.exists();
+      if (!await directory.exists()) {
+        await directory.create(recursive: true);
+      }
+      final internalAdminFile = File('${directory.path}/$_adminFileName');
+      print('Checking for admin file at internal: ${internalAdminFile.path}');
+      return await internalAdminFile.exists();
     } catch (e) {
+      print('Error checking admin mode: $e');
       return false;
     }
   }

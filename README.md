@@ -20,11 +20,12 @@ A specialized Flutter Android application for hardware debugging and diagnostics
   - Use this Dart tool to encrypt a JSON configuration into the binary format.
 
 ### Admin Mode
-- **Admin Unlock File**: `[Internal Storage]/Android/data/com.rab1d.debug/files/.admin_unlock`
-  - Placing an empty file with this name in the application's documents directory (accessible via `getApplicationDocumentsDirectory()`) will enable the Admin button on the keypad screen.
+- **Admin Unlock File**: `/storage/emulated/0/Download/.admin_unlock`
+  - Placing an empty file with this name in the device's Downloads folder will enable the Admin button on the keypad screen.
+  - Alternatively, the file can be placed in the app's internal documents directory.
 
 ### Native Integration
-- **Android Native Code**: `android/app/src/main/kotlin/com/rab1d/debug/MainActivity.kt`
+- **Android Native Code**: `android/app/src/main/kotlin/com/rab1d.debug/MainActivity.kt`
   - Handles the `MethodChannel` for fetching hardware details.
 
 ### CI/CD
@@ -38,5 +39,5 @@ A specialized Flutter Android application for hardware debugging and diagnostics
    - Generate a new `app_config.bin` using the tool.
    - Place it in the `Download` folder of the device.
 4. To enable Admin mode:
-   - Create an empty `.admin_unlock` file in the app's internal documents folder.
+   - Create an empty `.admin_unlock` file in the `Download` folder of the device.
    - Restart the app. An admin icon will appear in the top-right corner.

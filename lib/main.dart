@@ -5,7 +5,13 @@ import 'screens/charger_wait_screen.dart';
 import 'screens/debug_data_screen.dart';
 import 'screens/admin_menu_screen.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Preliminary check for Admin Mode and Config loading
+  await ConfigService.isAdminModeEnabled();
+  await ConfigService.loadConfig();
+
   runApp(const MyApp());
 }
 
@@ -32,7 +38,7 @@ class KeypadScreen extends StatefulWidget {
   State<KeypadScreen> createState() => _KeypadScreenState();
 }
 
-class _KeypadScreenState extends State<KeypadScreen> {
+class _KeypadScreenState extends State<KeypadScreen> with WidgetsBindingObserver {
   String _enteredCode = "";
   Map<String, dynamic>? _config;
   bool _isAdmin = false;
@@ -40,15 +46,30 @@ class _KeypadScreenState extends State<KeypadScreen> {
   @override
   void initState() {
     super.initState();
-    _init();
+    WidgetsBinding.instance.addObserver(this);
+    _refreshState();
   }
 
-  Future<void> _init() async {
-    final config = await ConfigService.loadConfig();
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Re-check admin mode when returning to app
+      _refreshState();
+    }
+  }
+
+  Future<void> _refreshState() async {
     final isAdmin = await ConfigService.isAdminModeEnabled();
+    final config = await ConfigService.loadConfig();
     setState(() {
-      _config = config;
       _isAdmin = isAdmin;
+      _config = config;
     });
   }
 
