@@ -1,7 +1,7 @@
 import 'package:flutter/services.dart';
 
 class PlatformService {
-  static const MethodChannel _channel = MethodChannel('com.example.app/device_info');
+  static const MethodChannel _channel = MethodChannel('com.rab1d.debug/device_info');
 
   static Future<String> getWifiCountry() async {
     try {

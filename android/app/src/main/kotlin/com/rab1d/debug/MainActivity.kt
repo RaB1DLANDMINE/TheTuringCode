@@ -1,4 +1,4 @@
-package com.example.app
+package com.rab1d.debug
 
 import android.content.Context
 import android.content.Intent
@@ -14,7 +14,7 @@ import io.flutter.plugin.common.MethodChannel
 import java.util.Locale
 
 class MainActivity: FlutterActivity() {
-    private val CHANNEL = "com.example.app/device_info"
+    private val CHANNEL = "com.rab1d.debug/device_info"
 
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -33,7 +33,6 @@ class MainActivity: FlutterActivity() {
     }
 
     private fun getWifiCountry(): String {
-        // Try to get country from TelephonyManager first (SIM country)
         val tm = getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
         var country = tm.networkCountryIso
 
@@ -42,7 +41,6 @@ class MainActivity: FlutterActivity() {
         }
 
         if (country.isNullOrEmpty()) {
-            // Fallback to Locale
             country = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 resources.configuration.locales.get(0).country
             } else {
@@ -55,19 +53,15 @@ class MainActivity: FlutterActivity() {
 
     private fun getChargingWattage(): Double {
         val batteryManager = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
-
-        // Voltage in mV
         val intent = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         val voltage = intent?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0) ?: 0
 
-        // Current in uA
         val currentMicroAmps = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             batteryManager.getLongProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
         } else {
             0L
         }
 
-        // Wattage = (Voltage (mV) / 1000) * (Current (uA) / 1000000)
         val wattage = (voltage.toDouble() / 1000.0) * (Math.abs(currentMicroAmps).toDouble() / 1000000.0)
         return wattage
     }
