@@ -13,8 +13,6 @@ class ConfigService {
   static Map<String, dynamic>? _cachedConfig;
 
   static Future<Map<String, dynamic>?> loadConfig() async {
-    if (_cachedConfig != null) return _cachedConfig;
-
     try {
       // 1. Try to load from external storage (Downloads)
       final externalFile = await _getExternalFile();
@@ -38,31 +36,42 @@ class ConfigService {
     }
   }
 
+  static Future<bool> saveConfig(Map<String, dynamic> config) async {
+    try {
+      final jsonStr = json.encode(config);
+      final encryptedBytes = EncryptionHelper.encrypt(jsonStr);
+
+      final externalFile = await _getExternalFile();
+      if (externalFile != null) {
+        await externalFile.writeAsBytes(encryptedBytes);
+        _cachedConfig = config; // Update cache
+        print('Config saved and encrypted to: ${externalFile.path}');
+        return true;
+      }
+      return false;
+    } catch (e) {
+      print('Error saving config: $e');
+      return false;
+    }
+  }
+
   static Future<bool> isAdminModeEnabled() async {
     try {
-      // Check in Downloads folder first for user accessibility
       if (Platform.isAndroid) {
         if (await Permission.manageExternalStorage.request().isGranted ||
             await Permission.storage.request().isGranted) {
           final downloadDir = Directory('/storage/emulated/0/Download');
           final adminFile = File('${downloadDir.path}/$_adminFileName');
           if (await adminFile.exists()) {
-            print('Admin mode enabled via Downloads file: ${adminFile.path}');
             return true;
           }
         }
       }
 
-      // Fallback to internal documents directory
       final directory = await getApplicationDocumentsDirectory();
-      if (!await directory.exists()) {
-        await directory.create(recursive: true);
-      }
       final internalAdminFile = File('${directory.path}/$_adminFileName');
-      print('Checking for admin file at internal: ${internalAdminFile.path}');
       return await internalAdminFile.exists();
     } catch (e) {
-      print('Error checking admin mode: $e');
       return false;
     }
   }

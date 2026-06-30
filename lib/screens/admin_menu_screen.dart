@@ -1,16 +1,37 @@
 import 'package:flutter/material.dart';
 import '../services/config_service.dart';
+import 'admin_edit_config_screen.dart';
 
-class AdminMenuScreen extends StatelessWidget {
+class AdminMenuScreen extends StatefulWidget {
   const AdminMenuScreen({super.key});
 
+  @override
+  State<AdminMenuScreen> createState() => _AdminMenuScreenState();
+}
+
+class _AdminMenuScreenState extends State<AdminMenuScreen> {
   @override
   Widget build(BuildContext context) {
     final config = ConfigService.getLoadedConfig();
     final Map<String, dynamic> codes = config?['codes'] ?? {};
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Admin Menu - Codes')),
+      appBar: AppBar(
+        title: const Text('Admin Menu - Codes'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.edit),
+            onPressed: () async {
+              final updated = await Navigator.of(context).push(
+                MaterialPageRoute(builder: (context) => const AdminEditConfigScreen()),
+              );
+              if (updated == true) {
+                setState(() {}); // Refresh list
+              }
+            },
+          ),
+        ],
+      ),
       body: codes.isEmpty
           ? const Center(child: Text('No codes found.'))
           : ListView.builder(
@@ -25,6 +46,17 @@ class AdminMenuScreen extends StatelessWidget {
                 );
               },
             ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () async {
+          final updated = await Navigator.of(context).push(
+            MaterialPageRoute(builder: (context) => const AdminEditConfigScreen()),
+          );
+          if (updated == true) {
+            setState(() {}); // Refresh list
+          }
+        },
+        child: const Icon(Icons.edit),
+      ),
     );
   }
 }
