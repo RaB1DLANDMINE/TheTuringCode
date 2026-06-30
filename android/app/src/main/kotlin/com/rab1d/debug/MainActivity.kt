@@ -26,6 +26,9 @@ class MainActivity: FlutterActivity() {
             } else if (call.method == "getChargingWattage") {
                 val wattage = getChargingWattage()
                 result.success(wattage)
+            } else if (call.method == "getBatteryData") {
+                val data = getBatteryData()
+                result.success(data)
             } else {
                 result.notImplemented()
             }
@@ -51,18 +54,49 @@ class MainActivity: FlutterActivity() {
         return country?.uppercase(Locale.ROOT) ?: "Unknown"
     }
 
-    private fun getChargingWattage(): Double {
+    private fun getBatteryData(): Map<String, Any> {
         val batteryManager = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
         val intent = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+
+        // Voltage in mV
         val voltage = intent?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0) ?: 0
 
-        val currentMicroAmps = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+        // Current in uA (MicroAmps). Note: some devices report in mA (MilliAmps).
+        // Standard Android API says it's in microAmperes.
+        var currentMicroAmps = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             batteryManager.getLongProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
         } else {
             0L
         }
 
-        val wattage = (voltage.toDouble() / 1000.0) * (Math.abs(currentMicroAmps).toDouble() / 1000000.0)
+        // Heuristic: If current is very small (e.g. < 5000) and we are charging,
+        // it might be reported in mA instead of uA.
+        // But 5000mA is 5A which is plausible for fast charging.
+        // Let's just provide the raw values to Dart and let it handle or display them.
+
+        return mapOf(
+            "voltage_mv" to voltage,
+            "current_ua" to currentMicroAmps
+        )
+    }
+
+    private fun getChargingWattage(): Double {
+        val data = getBatteryData()
+        val voltage = data["voltage_mv"] as Int
+        val currentMicroAmps = data["current_ua"] as Long
+
+        // Wattage = (Voltage (V)) * (Current (A))
+        // (voltage / 1000.0) * (abs(currentMicroAmps) / 1000000.0)
+
+        var currentAmps = Math.abs(currentMicroAmps).toDouble() / 1000000.0
+
+        // Check if value is ridiculously small (like it was actually mA)
+        if (currentAmps > 0 && currentAmps < 0.01) {
+             // Maybe it was reported in mA
+             currentAmps = Math.abs(currentMicroAmps).toDouble() / 1000.0
+        }
+
+        val wattage = (voltage.toDouble() / 1000.0) * currentAmps
         return wattage
     }
 }

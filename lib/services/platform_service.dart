@@ -20,4 +20,13 @@ class PlatformService {
       return 0.0;
     }
   }
+
+  static Future<Map<String, dynamic>> getBatteryData() async {
+    try {
+      final Map<dynamic, dynamic> data = await _channel.invokeMethod('getBatteryData');
+      return Map<String, dynamic>.from(data);
+    } on PlatformException catch (e) {
+      return {"error": e.message};
+    }
+  }
 }

@@ -1,36 +1,63 @@
 import sys
 
-def decipher_wattage(jumble):
+def extract_fixed_format(jumble, index, length):
+    # We know the fixed format from the Dart side:
+    # Wattage: toStringAsFixed(2) -> e.g. "15.50" or "5.00"
+    # Voltage: toStringAsFixed(2) -> e.g. "4.20"
+    # Current: toStringAsFixed(3) -> e.g. "1.500"
+
+    # Actually, the length is not fixed because the integer part can vary.
+    # But we can look for the dot and then take X digits after it.
+
+    val = ""
+    dot_index = -1
+    for i in range(index, len(jumble)):
+        char = jumble[i]
+        if char == '.':
+            dot_index = i
+            val += char
+        elif char.isdigit():
+            val += char
+            if dot_index != -1:
+                # We have seen the dot. Check how many decimals we have.
+                decimals = i - dot_index
+                # We expect 2 decimals for W/V and 3 for I.
+                # However, since we don't know which one it is here,
+                # let's look at the context or just take a reasonable amount.
+                # If we are extracting Wattage/Voltage, we want 2.
+                # If Current, 3.
+                pass
+        else:
+            break
+
+    return val
+
+def decipher_all(jumble):
     if len(jumble) != 64:
         print("Error: Jumble must be exactly 64 characters long.")
         return None
 
-    # Wattage starts at the 21st character (index 20)
-    # The jumble is generated from numbers 0-9.
-    # The wattage is formatted as toStringAsFixed(2), so it looks like "XX.XX"
-    # However, since the jumble base is only numbers '0123456789',
-    # the dot '.' will be preserved in the jumble because of how _generateJumble works.
+    # Refined extraction based on known formats
+    # Wattage (index 20): has '.' and 2 decimals
+    wattage_raw = jumble[20:30] # Take a slice
+    w_dot = wattage_raw.find('.')
+    wattage = wattage_raw[:w_dot + 3] if w_dot != -1 else wattage_raw
 
-    # We need to find where the wattage value ends.
-    # It starts at index 20. We can look for the pattern of numbers and a dot.
+    # Voltage (index 30): has '.' and 2 decimals
+    voltage_raw = jumble[30:40]
+    v_dot = voltage_raw.find('.')
+    voltage = voltage_raw[:v_dot + 3] if v_dot != -1 else voltage_raw
 
-    potential_wattage = ""
-    for i in range(20, len(jumble)):
-        char = jumble[i]
-        if char.isdigit() or char == '.':
-            potential_wattage += char
-        else:
-            break
+    # Current (index 40): has '.' and 3 decimals
+    current_raw = jumble[40:55]
+    i_dot = current_raw.find('.')
+    current = current_raw[:i_dot + 4] if i_dot != -1 else current_raw
 
-        # We know wattage is formatted as fixed 2 decimals,
-        # so it's likely something like "15.50" (5 chars) or "5.50" (4 chars)
-        # We can stop if we have 2 digits after the dot.
-        if '.' in potential_wattage:
-            parts = potential_wattage.split('.')
-            if len(parts) > 1 and len(parts[1]) == 2:
-                break
-
-    return potential_wattage
+    return {
+        "Wattage": wattage,
+        "Voltage": voltage,
+        "Current": current
+    }
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
@@ -38,6 +65,8 @@ if __name__ == "__main__":
         sys.exit(1)
 
     jumble_input = sys.argv[1]
-    result = decipher_wattage(jumble_input)
-    if result:
-        print(f"Extracted Wattage: {result}W")
+    results = decipher_all(jumble_input)
+    if results:
+        for key, val in results.items():
+            unit = "W" if key == "Wattage" else ("V" if key == "Voltage" else "A")
+            print(f"{key}: {val}{unit}")

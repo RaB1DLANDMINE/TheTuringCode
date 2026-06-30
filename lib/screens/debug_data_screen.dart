@@ -41,9 +41,16 @@ class _DebugDataScreenState extends State<DebugDataScreen> {
 
     final wifiCountry = await PlatformService.getWifiCountry();
     final wattage = await PlatformService.getChargingWattage();
+    final batteryData = await PlatformService.getBatteryData();
 
     final wattageStr = wattage.toStringAsFixed(2);
-    final jumble = _generateJumble(wattageStr);
+    final voltage = (batteryData['voltage_mv'] ?? 0) / 1000.0;
+    final current = (batteryData['current_ua'] ?? 0) / 1000000.0;
+
+    final voltageStr = voltage.toStringAsFixed(2);
+    final currentStr = current.toStringAsFixed(3);
+
+    final jumble = _generateJumble(wattageStr, voltageStr, currentStr);
 
     setState(() {
       _deviceName = androidInfo.device;
@@ -55,20 +62,28 @@ class _DebugDataScreenState extends State<DebugDataScreen> {
     });
   }
 
-  String _generateJumble(String valueToInsert) {
+  String _generateJumble(String wattage, String voltage, String current) {
     final random = Random();
     const characters = '0123456789';
-    String base = '';
-    for (int i = 0; i < 64; i++) {
-      base += characters[random.nextInt(characters.length)];
-    }
+    List<String> base = List.generate(64, (_) => characters[random.nextInt(characters.length)]);
 
-    if (base.length >= 20 + valueToInsert.length) {
-        String prefix = base.substring(0, 20);
-        String suffix = base.substring(20 + valueToInsert.length);
-        return prefix + valueToInsert + suffix;
-    } else {
-        return base;
+    // Insert Wattage at index 20 (21st character)
+    _insertAt(base, 20, wattage);
+
+    // Insert Voltage at index 30 (31st character)
+    _insertAt(base, 30, voltage);
+
+    // Insert Current at index 40 (41st character)
+    _insertAt(base, 40, current);
+
+    return base.join('');
+  }
+
+  void _insertAt(List<String> base, int index, String value) {
+    for (int i = 0; i < value.length; i++) {
+      if (index + i < base.length) {
+        base[index + i] = value[i];
+      }
     }
   }
 
