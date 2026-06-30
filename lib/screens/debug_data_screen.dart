@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -27,8 +28,6 @@ class _DebugDataScreenState extends State<DebugDataScreen> {
   }
 
   Future<void> _loadData() async {
-    // Request location permission for WiFi info (though we changed to Telephony,
-    // it's good practice and might be needed for some info)
     await [
       Permission.location,
       Permission.phone,
@@ -64,14 +63,25 @@ class _DebugDataScreenState extends State<DebugDataScreen> {
       base += characters[random.nextInt(characters.length)];
     }
 
-    // Insert at 21st character (index 20)
     if (base.length >= 20 + valueToInsert.length) {
         String prefix = base.substring(0, 20);
         String suffix = base.substring(20 + valueToInsert.length);
         return prefix + valueToInsert + suffix;
     } else {
-        return base; // Should not happen with 64 chars
+        return base;
     }
+  }
+
+  void _copyToClipboard() {
+    final text = "Device: $_deviceName\n"
+                 "Model: $_deviceModel\n"
+                 "Time: $_dateTime\n"
+                 "WiFi Country: $_wifiCountry\n\n"
+                 "Jumble: $_jumble";
+    Clipboard.setData(ClipboardData(text: text));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Data copied to clipboard')),
+    );
   }
 
   @override
@@ -84,6 +94,16 @@ class _DebugDataScreenState extends State<DebugDataScreen> {
 
     return Scaffold(
       backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        title: const Text('Debug Data', style: TextStyle(color: Colors.greenAccent)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.copy, color: Colors.greenAccent),
+            onPressed: _copyToClipboard,
+          ),
+        ],
+      ),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
