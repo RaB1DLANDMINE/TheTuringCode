@@ -18,19 +18,6 @@ class _AdminMenuScreenState extends State<AdminMenuScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Admin Menu - Codes'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit),
-            onPressed: () async {
-              final updated = await Navigator.of(context).push(
-                MaterialPageRoute(builder: (context) => const AdminEditConfigScreen()),
-              );
-              if (updated == true) {
-                setState(() {}); // Refresh list
-              }
-            },
-          ),
-        ],
       ),
       body: codes.isEmpty
           ? const Center(child: Text('No codes found.'))

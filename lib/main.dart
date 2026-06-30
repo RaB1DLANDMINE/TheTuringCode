@@ -8,7 +8,6 @@ import 'screens/admin_menu_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Preliminary check for Admin Mode and Config loading
   await ConfigService.isAdminModeEnabled();
   await ConfigService.loadConfig();
 
@@ -59,7 +58,6 @@ class _KeypadScreenState extends State<KeypadScreen> with WidgetsBindingObserver
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      // Re-check admin mode when returning to app
       _refreshState();
     }
   }
@@ -124,10 +122,12 @@ class _KeypadScreenState extends State<KeypadScreen> with WidgetsBindingObserver
           if (_isAdmin)
             IconButton(
               icon: const Icon(Icons.admin_panel_settings),
-              onPressed: () {
-                Navigator.of(context).push(
+              onPressed: () async {
+                await Navigator.of(context).push(
                   MaterialPageRoute(builder: (context) => const AdminMenuScreen()),
                 );
+                // After returning from Admin Menu, refresh the config
+                _refreshState();
               },
             ),
         ],
