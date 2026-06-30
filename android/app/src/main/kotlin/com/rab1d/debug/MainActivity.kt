@@ -24,9 +24,6 @@ class MainActivity: FlutterActivity() {
             if (call.method == "getWifiCountry") {
                 val country = getWifiCountry()
                 result.success(country)
-            } else if (call.method == "getChargingWattage") {
-                val wattage = getChargingWattage()
-                result.success(wattage)
             } else if (call.method == "getBatteryData") {
                 val data = getBatteryData()
                 result.success(data)
@@ -59,32 +56,58 @@ class MainActivity: FlutterActivity() {
         val batteryManager = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
         val intent = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
 
-        // Voltage in mV
+        // Android standard voltage in mV
         var voltage = intent?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0) ?: 0
 
-        // Current in uA (MicroAmps)
+        // Android standard current in uA (MicroAmps)
         var currentRaw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             batteryManager.getLongProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
         } else {
             0L
         }
 
-        // Try reading from sysfs for more accuracy on some devices (OPlus specific)
-        val sysVoltage = readSysFile("/sys/class/power_supply/battery/voltage_now")
-        if (sysVoltage != null) {
-            // voltage_now is usually in uV
-            voltage = (sysVoltage.toLong() / 1000).toInt()
+        // Try reading from various sysfs paths for better accuracy on OPlus/OnePlus devices
+        val voltagePaths = listOf(
+            "/sys/class/power_supply/battery/voltage_now",
+            "/sys/class/power_supply/battery/batt_vol",
+            "/sys/class/power_supply/battery/voltage_avg"
+        )
+
+        for (path in voltagePaths) {
+            val sysVal = readSysFile(path)
+            if (sysVal != null) {
+                val v = sysVal.toLong()
+                // If it's > 1,000,000 it's likely uV, if > 1000 it's mV, else V
+                voltage = when {
+                    v > 1000000 -> (v / 1000).toInt()
+                    v > 10000 -> v.toInt() // Likely mV already
+                    v > 0 -> (v * 1000).toInt() // Likely V
+                    else -> voltage
+                }
+                break
+            }
         }
 
-        val sysCurrent = readSysFile("/sys/class/power_supply/battery/current_now")
-        if (sysCurrent != null) {
-            currentRaw = sysCurrent.toLong()
+        val currentPaths = listOf(
+            "/sys/class/power_supply/battery/current_now",
+            "/sys/class/power_supply/battery/batt_chg_current",
+            "/sys/class/power_supply/battery/current_avg"
+        )
+
+        for (path in currentPaths) {
+            val sysVal = readSysFile(path)
+            if (sysVal != null) {
+                currentRaw = sysVal.toLong()
+                break
+            }
         }
 
         return mapOf(
             "voltage_mv" to voltage,
             "current_raw" to currentRaw,
-            "manufacturer" to Build.MANUFACTURER.lowercase(Locale.ROOT)
+            "manufacturer" to Build.MANUFACTURER.lowercase(Locale.ROOT),
+            "brand" to Build.BRAND.lowercase(Locale.ROOT),
+            "model" to Build.MODEL
         )
     }
 
@@ -99,21 +122,5 @@ class MainActivity: FlutterActivity() {
         } catch (e: Exception) {
             null
         }
-    }
-
-    private fun getChargingWattage(): Double {
-        val data = getBatteryData()
-        val voltage = data["voltage_mv"] as Int
-        val currentRaw = data["current_raw"] as Long
-
-        // Default: assume current is in uA
-        var currentAmps = Math.abs(currentRaw).toDouble() / 1000000.0
-
-        // Heuristic: if current is suspiciously low for charging, maybe it's mA
-        if (currentAmps > 0 && currentAmps < 0.05) {
-            currentAmps = Math.abs(currentRaw).toDouble() / 1000.0
-        }
-
-        return (voltage.toDouble() / 1000.0) * currentAmps
     }
 }

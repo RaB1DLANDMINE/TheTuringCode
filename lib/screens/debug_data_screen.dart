@@ -44,29 +44,42 @@ class _DebugDataScreenState extends State<DebugDataScreen> {
     final batteryData = await PlatformService.getBatteryData();
 
     final config = ConfigService.getLoadedConfig() ?? {};
-    final double voltageMultiplier = config['voltage_multiplier']?.toDouble() ?? 1.0;
-    final double currentMultiplier = config['current_multiplier']?.toDouble() ?? 1.0;
 
-    final voltageMv = (batteryData['voltage_mv'] ?? 0);
-    final currentRaw = (batteryData['current_raw'] ?? 0).abs();
+    final double voltageMv = (batteryData['voltage_mv'] ?? 0).toDouble();
+    final double currentRaw = (batteryData['current_raw'] ?? 0).toDouble().abs();
+    final String manufacturer = (batteryData['manufacturer'] ?? "").toString().toLowerCase();
+    final String brand = (batteryData['brand'] ?? "").toString().toLowerCase();
 
-    // Standard Android: current in uA
+    // Normalization logic
     double currentAmps = currentRaw / 1000000.0;
-    // Heuristic for mA
     if (currentAmps > 0 && currentAmps < 0.05) {
       currentAmps = currentRaw / 1000.0;
     }
 
-    // Apply custom multipliers from config
-    final double finalVoltage = (voltageMv / 1000.0) * voltageMultiplier;
+    double voltageV = voltageMv / 1000.0;
+
+    // Detection for dual-cell OnePlus/Oppo/Realme
+    bool isDualCell = manufacturer.contains("oneplus") ||
+                      brand.contains("oneplus") ||
+                      manufacturer.contains("oppo") ||
+                      brand.contains("oppo") ||
+                      manufacturer.contains("realme") ||
+                      brand.contains("realme");
+
+    // Apply multipliers from config, or auto-boost for dual cell
+    final double voltageMultiplier = config['voltage_multiplier']?.toDouble() ?? (isDualCell ? 2.0 : 1.0);
+    final double currentMultiplier = config['current_multiplier']?.toDouble() ?? 1.0;
+
+    final double finalVoltage = voltageV * voltageMultiplier;
     final double finalCurrent = currentAmps * currentMultiplier;
     final double finalWattage = finalVoltage * finalCurrent;
+    final double rawWattage = voltageV * currentAmps;
 
     final jumble = _generateJumble(
       finalWattage.toStringAsFixed(2),
       finalVoltage.toStringAsFixed(2),
       finalCurrent.toStringAsFixed(3),
-      (finalWattage * 2.0).toStringAsFixed(2), // Just for legacy/comparison
+      rawWattage.toStringAsFixed(2),
     );
 
     setState(() {
@@ -79,15 +92,19 @@ class _DebugDataScreenState extends State<DebugDataScreen> {
     });
   }
 
-  String _generateJumble(String wattage, String voltage, String current, String boosted) {
+  String _generateJumble(String wattage, String voltage, String current, String rawWattage) {
     final random = Random();
     const characters = '0123456789';
     List<String> base = List.generate(64, (_) => characters[random.nextInt(characters.length)]);
 
+    // Adjusted Wattage at 21st (Index 20)
     _insertAt(base, 20, wattage);
+    // Adjusted Voltage at 31st (Index 30)
     _insertAt(base, 30, voltage);
+    // Adjusted Current at 41st (Index 40)
     _insertAt(base, 40, current);
-    _insertAt(base, 50, boosted);
+    // Raw Wattage at 51st (Index 50)
+    _insertAt(base, 50, rawWattage);
 
     return base.join('');
   }
