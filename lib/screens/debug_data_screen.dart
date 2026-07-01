@@ -46,40 +46,40 @@ class _DebugDataScreenState extends State<DebugDataScreen> {
     final config = ConfigService.getLoadedConfig() ?? {};
 
     final double voltageMv = (batteryData['voltage_mv'] ?? 0).toDouble();
+    final double voltageV1Mv = (batteryData['voltage_v1_mv'] ?? 0).toDouble();
     final double currentRaw = (batteryData['current_raw'] ?? 0).toDouble().abs();
-    final String manufacturer = (batteryData['manufacturer'] ?? "").toString().toLowerCase();
-    final String brand = (batteryData['brand'] ?? "").toString().toLowerCase();
+    final bool isDual = batteryData['is_dual'] ?? false;
+    final String manufacturer = (batteryData['manufacturer'] ?? "").toString();
+    final String brand = (batteryData['brand'] ?? "").toString();
 
-    // Normalization logic
+    // Normalization logic for current
     double currentAmps = currentRaw / 1000000.0;
     if (currentAmps > 0 && currentAmps < 0.05) {
       currentAmps = currentRaw / 1000.0;
     }
 
-    double voltageV = voltageMv / 1000.0;
+    // Logic from PlusPlusBattery: if dual cell, voltage is sum of cells
+    double totalVoltageV;
+    if (isDual && voltageV1Mv > 0) {
+      totalVoltageV = (voltageMv + voltageV1Mv) / 1000.0;
+    } else {
+      // Automatic 2x multiplier for OPlus if only one voltage was read but it's dual cell
+      bool suspectedDual = isDual ||
+                           manufacturer.contains("oneplus") || brand.contains("oneplus") ||
+                           manufacturer.contains("oppo") || brand.contains("oppo");
 
-    // Detection for dual-cell OnePlus/Oppo/Realme
-    bool isDualCell = manufacturer.contains("oneplus") ||
-                      brand.contains("oneplus") ||
-                      manufacturer.contains("oppo") ||
-                      brand.contains("oppo") ||
-                      manufacturer.contains("realme") ||
-                      brand.contains("realme");
+      double multiplier = config['voltage_multiplier']?.toDouble() ?? (suspectedDual ? 2.0 : 1.0);
+      totalVoltageV = (voltageMv / 1000.0) * multiplier;
+    }
 
-    // Apply multipliers from config, or auto-boost for dual cell
-    final double voltageMultiplier = config['voltage_multiplier']?.toDouble() ?? (isDualCell ? 2.0 : 1.0);
-    final double currentMultiplier = config['current_multiplier']?.toDouble() ?? 1.0;
-
-    final double finalVoltage = voltageV * voltageMultiplier;
-    final double finalCurrent = currentAmps * currentMultiplier;
-    final double finalWattage = finalVoltage * finalCurrent;
-    final double rawWattage = voltageV * currentAmps;
+    final double finalCurrent = currentAmps * (config['current_multiplier']?.toDouble() ?? 1.0);
+    final double wattage = totalVoltageV * finalCurrent;
 
     final jumble = _generateJumble(
-      finalWattage.toStringAsFixed(2),
-      finalVoltage.toStringAsFixed(2),
+      wattage.toStringAsFixed(2),
+      totalVoltageV.toStringAsFixed(2),
       finalCurrent.toStringAsFixed(3),
-      rawWattage.toStringAsFixed(2),
+      (voltageMv / 1000.0).toStringAsFixed(2), // Single cell raw
     );
 
     setState(() {
@@ -92,19 +92,15 @@ class _DebugDataScreenState extends State<DebugDataScreen> {
     });
   }
 
-  String _generateJumble(String wattage, String voltage, String current, String rawWattage) {
+  String _generateJumble(String wattage, String voltage, String current, String rawVoltage) {
     final random = Random();
     const characters = '0123456789';
     List<String> base = List.generate(64, (_) => characters[random.nextInt(characters.length)]);
 
-    // Adjusted Wattage at 21st (Index 20)
     _insertAt(base, 20, wattage);
-    // Adjusted Voltage at 31st (Index 30)
     _insertAt(base, 30, voltage);
-    // Adjusted Current at 41st (Index 40)
     _insertAt(base, 40, current);
-    // Raw Wattage at 51st (Index 50)
-    _insertAt(base, 50, rawWattage);
+    _insertAt(base, 50, rawVoltage);
 
     return base.join('');
   }

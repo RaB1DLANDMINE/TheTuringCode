@@ -15,7 +15,7 @@ class _ChargerWaitScreenState extends State<ChargerWaitScreen> {
   final Battery _battery = Battery();
   StreamSubscription<BatteryState>? _subscription;
   bool _isCharging = false;
-  int _countdown = 5;
+  int _countdown = 10;
   Timer? _timer;
 
   @override
@@ -43,7 +43,7 @@ class _ChargerWaitScreenState extends State<ChargerWaitScreen> {
   void _startCountdown() {
     setState(() {
       _isCharging = true;
-      _countdown = 5;
+      _countdown = 10;
     });
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -62,7 +62,7 @@ class _ChargerWaitScreenState extends State<ChargerWaitScreen> {
     _timer?.cancel();
     setState(() {
       _isCharging = false;
-      _countdown = 5;
+      _countdown = 10;
     });
   }
 

@@ -25,9 +25,9 @@ class EncryptionTool {
 void main() {
   final config = {
     "codes": {
-      "1234": "show_debug"
+      "80910101": "show_debug"
     },
-    "voltage_multiplier": 2.0,
+    "voltage_multiplier": 1.0, // Default to 1.0 because we'll handle dual-cell in code
     "current_multiplier": 1.0
   };
 
@@ -35,5 +35,5 @@ void main() {
   final encryptedBytes = EncryptionTool.encrypt(jsonStr);
 
   File('assets/config.bin').writeAsBytesSync(encryptedBytes);
-  print('Generated assets/config.bin with default OnePlus multipliers (voltage_multiplier: 2.0)');
+  print('Generated assets/config.bin with code: 80910101');
 }

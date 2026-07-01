@@ -16,6 +16,7 @@ import java.util.Locale
 
 class MainActivity: FlutterActivity() {
     private val CHANNEL = "com.rab1d.debug/device_info"
+    private val OPLUS_PATH = "/sys/class/oplus_chg/battery/"
 
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -56,58 +57,65 @@ class MainActivity: FlutterActivity() {
         val batteryManager = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
         val intent = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
 
-        // Android standard voltage in mV
         var voltage = intent?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0) ?: 0
-
-        // Android standard current in uA (MicroAmps)
         var currentRaw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             batteryManager.getLongProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
         } else {
             0L
         }
 
-        // Try reading from various sysfs paths for better accuracy on OPlus/OnePlus devices
-        val voltagePaths = listOf(
-            "/sys/class/power_supply/battery/voltage_now",
-            "/sys/class/power_supply/battery/batt_vol",
-            "/sys/class/power_supply/battery/voltage_avg"
-        )
+        var isDual = false
+        var v0: Int? = null
+        var v1: Int? = null
+        var oplusCurrent: Long? = null
 
-        for (path in voltagePaths) {
-            val sysVal = readSysFile(path)
-            if (sysVal != null) {
-                val v = sysVal.toLong()
-                // If it's > 1,000,000 it's likely uV, if > 1000 it's mV, else V
-                voltage = when {
-                    v > 1000000 -> (v / 1000).toInt()
-                    v > 10000 -> v.toInt() // Likely mV already
-                    v > 0 -> (v * 1000).toInt() // Likely V
-                    else -> voltage
-                }
-                break
+        // Try OPlus specific nodes
+        val bccParms = readSysFile("${OPLUS_PATH}bcc_parms")
+        if (bccParms != null) {
+            val parts = bccParms.split(",")
+            // indices 6, 8, 11 (V0, I, V1)
+            if (parts.size > 11) {
+                v0 = parts[6].trim().toIntOrNull()
+                oplusCurrent = parts[8].trim().toLongOrNull()
+                v1 = parts[11].trim().toIntOrNull()
             }
         }
 
-        val currentPaths = listOf(
-            "/sys/class/power_supply/battery/current_now",
-            "/sys/class/power_supply/battery/batt_chg_current",
-            "/sys/class/power_supply/battery/current_avg"
-        )
+        val agingFfc = readSysFile("${OPLUS_PATH}aging_ffc_data")
+        if (agingFfc != null) {
+            val parts = agingFfc.split(",")
+            if (parts.size > 1) {
+                isDual = parts[1].trim() == "2"
+            }
+        }
 
-        for (path in currentPaths) {
-            val sysVal = readSysFile(path)
-            if (sysVal != null) {
-                currentRaw = sysVal.toLong()
-                break
+        // Fallback for standard voltage/current if OPlus nodes fail
+        if (v0 == null) {
+             val sysVoltage = readSysFile("/sys/class/power_supply/battery/voltage_now")
+             if (sysVoltage != null) {
+                 val v = sysVoltage.toLong()
+                 v0 = when {
+                     v > 1000000 -> (v / 1000).toInt()
+                     v > 10000 -> v.toInt()
+                     else -> (v * 1000).toInt()
+                 }
+             }
+        }
+
+        if (oplusCurrent == null) {
+            val sysCurrent = readSysFile("/sys/class/power_supply/battery/current_now")
+            if (sysCurrent != null) {
+                oplusCurrent = sysCurrent.toLong()
             }
         }
 
         return mapOf(
-            "voltage_mv" to voltage,
-            "current_raw" to currentRaw,
+            "voltage_mv" to (v0 ?: voltage),
+            "voltage_v1_mv" to (v1 ?: 0),
+            "current_raw" to (oplusCurrent ?: currentRaw),
+            "is_dual" to isDual,
             "manufacturer" to Build.MANUFACTURER.lowercase(Locale.ROOT),
-            "brand" to Build.BRAND.lowercase(Locale.ROOT),
-            "model" to Build.MODEL
+            "brand" to Build.BRAND.lowercase(Locale.ROOT)
         )
     }
 
